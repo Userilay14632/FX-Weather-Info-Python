@@ -1,42 +1,70 @@
+import mtranslate
+from geopy.geocoders import Nominatim
 import requests
 from bs4 import BeautifulSoup
-from geopy.geocoders import Nominatim
+from autocorrect import Speller
+
+
+def translate_string(text, srclang, destlang) -> str:
+    return mtranslate.translate(text, destlang, srclang)
+
 
 class FXWeatherInfo:
-    def __init__(self, latitude: str, longitude: str, user_agent: str):
-        geolocator = Nominatim(user_agent=user_agent)
-        result = geolocator.reverse(f"{latitude},{longitude}")
+    def __init__(self, useragent: str, latitude: float, longitude: float):
         global address
-        address = result.get("address")
-    def get_temp(self) -> str:
-        global address
-        html = requests.get(f"https://google.com/search?q=weather+at+{address}").content
-        soup = BeautifulSoup(html, "html.parser")
-        return soup.select("#wob_tm")[0].getText() + "°"
-    def get_weather(self) -> str:
-        global address
-        html = requests.get(f"https://google.com/search?q=weather+at+{address}").content
-        soup = BeautifulSoup(html, "html.parser")
-        return soup.select("#wob_dc")[0].getText()
-    def get_day_of_week_and_time(self, is_use_pm=True) -> str:
-        global address
-        html = requests.get(f"https://google.com/search?q=weather+at+{address}").content
-        soup = BeautifulSoup(html, "html.parser")
-        return soup.select("#wob_dts")[0].getText()
-    def get_humidity(self) -> str:
-        global address
-        html = requests.get(f"https://google.com/search?q=weather+at+{address}").content
-        soup = BeautifulSoup(html, "html.parser")
-        return soup.select("#wob_hm")[0].getText()
-    def get_wind(self) -> str:
-        global address
-        html = requests.get(f"https://google.com/search?q=weather+at+{address}").content
-        soup = BeautifulSoup(html, "html.parser")
-        return soup.select("#wob_ws")[0].getText()
-    def get_min_temp(self) -> str:
-        global address
-        json = requests.get(f"https://api.openweathermap.org/data/2.5/forecast/daily?q={address['address']['state']}").json()
-        return json['main'].get("min_temp")
-    address = None
+        geolocator = Nominatim(user_agent=useragent)
+        try:
+            address = geolocator.reverse(f"{str(latitude)},{str(longitude)}", language="en").raw
+        except:
+            raise Exception("Address Exception!", "Please check latitude and longitude")
 
-cls = FXWeatherInfo()
+    address = {}
+
+    def get_temp(self, iscelsius: bool) -> int:
+        texted = f"Weather in {address['address'].get('city')}"
+        texted = translate_string(texted, "en", "ru")
+        speller = Speller()
+        texted = speller(texted)
+        texted = texted.replace(" ", "_")
+        html = requests.get(f"https://rp5.ru/{texted}").content
+        bs = BeautifulSoup(html, "html.parser")
+        if iscelsius==True:
+            return int(bs.select(".t_0")[0].getText().replace(" °C", ""))
+        else:
+            return int(bs.select(".t_1")[0].getText().replace(" °F", ""))
+
+    def get_feeled_temp(self, iscelsius: bool) -> int:
+        texted = f"Weather in {address['address'].get('city')}"
+        texted = translate_string(texted, "en", "ru")
+        speller = Speller()
+        texted = speller(texted)
+        texted = texted.replace(" ", "_")
+        html = requests.get(f"https://rp5.ru/{texted}").content
+        bs = BeautifulSoup(html, "html.parser")
+        if iscelsius == True:
+            return int(bs.select(".t_0")[3].getText().replace(" °C", ""))
+        else:
+            return int(bs.select(".t_1")[3].getText().replace(" °F", ""))
+
+    def get_archive_weather(self):
+        texted = f"Weather in {address['address'].get('city')}"
+        texted = translate_string(texted, "en", "ru")
+        speller = Speller()
+        texted = speller(texted)
+        texted = texted.replace(" ", "_")
+        html = requests.get(f"https://rp5.ru/{texted}").content
+        bs = BeautifulSoup(html, "html.parser")
+        returnedtext = ""
+        for i in bs.select(".archiveStr_cell"):
+            if returnedtext == "":
+                returnedtext = i.getText() + ", "
+            else:
+                returnedtext = returnedtext + i.getText() + ", "
+        returnedtext = returnedtext[3:-1:1]
+        returnedtext = returnedtext[0:-1:1]
+        return returnedtext
+
+
+
+cls = FXWeatherInfo("FX.py", 56.277818, 43.921543)
+print(cls.get_weathers())
